@@ -1,0 +1,6 @@
+with rel_year: 0.87 f1
+with inv_release_year: 0.86 f1
+without time_signature and mode and with inv_rel_year: 0.87 f1
+without time_sig and mode and key and with inv_rel_year: 0.88 f1
+without time_sig and mode and key and with rel_year: 0.87 f1
+without time_sig and mode and key and track_artist and with rel_year: 0.87 f1
