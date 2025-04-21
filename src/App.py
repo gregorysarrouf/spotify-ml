@@ -1,75 +1,22 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import pickle
 import joblib
 
+# Page setup
 st.set_page_config(page_title="Song Popularity Predictor", layout="centered")
 
 st.title("🎶 Song Popularity Predictor")
 st.markdown("Fill in the song's features below to predict its popularity!")
 
-with st.expander("🎛️ Audio Features"):
-    loudness = st.slider('Loudness', -60.0, 0.0, -10.0)
-    energy = st.slider('Energy', 0.0, 1.0, 0.5)
-    valence = st.slider('Valence', 0.0, 1.0, 0.5)
-    danceability = st.slider('Danceability', 0.0, 1.0, 0.5)
-    tempo = st.slider('Tempo', 40, 250, 120)
-    duration_ms = st.number_input('Duration (ms)', 10000, 600000, 200000)
-    liveness = st.slider('Liveness', 0.0, 1.0, 0.1)
-    speechiness = st.slider('Speechiness', 0.0, 1.0, 0.05)
-    acousticness = st.slider('Acousticness', 0.0, 1.0, 0.1)
-
-with st.expander("🎼 Musical Features"):
-    instrumental_loud_ratio = st.slider('Instrumental Loudness Ratio', 0.0, 1.0, 0.5)
-    release_year_inverse = st.number_input('Release Year', 1950, 2025, 2020)
-
-with st.expander("📦 Playlist & Metadata"):
-    playlist_genre = st.text_input("Playlist Genre", "pop")
-    playlist_subgenre = st.text_input("Playlist Subgenre", "mainstream")
-    playlist_name = st.text_input("Playlist Name", "Today's Top Hits")
-    track_artist = st.text_input("Track Artist", "Taylor Swift")
-
-# Compute loud_dur_ratio and acousticness_inverse (if needed)
-loud_dur_ratio = loudness / duration_ms
-acousticness_inverse = 1.0 - acousticness
-
-# Create raw input data
-input_data = {
-    "energy": energy,
-    "tempo": tempo,
-    "danceability": danceability,
-    "playlist_genre": playlist_genre,
-    "loudness": loudness,
-    "liveness": liveness,
-    "valence": valence,
-    "track_artist": track_artist,
-    "speechiness": speechiness,
-    "playlist_name": playlist_name,
-    "duration_ms": duration_ms,
-    "playlist_subgenre": playlist_subgenre,
-    "acousticness_inverse": acousticness_inverse,
-    "instrumental_loud_ratio": instrumental_loud_ratio,
-    "loud_dur_ratio": loud_dur_ratio,
-    "release_year_inverse": release_year_inverse,
-}
-
-# Convert to DataFrame
-df = pd.DataFrame([input_data])
-
-# Load encoders
+# Load encoders and model
 genre_encoder = joblib.load('playlist_genre_encoder.pkl')
 subgenre_encoder = joblib.load('playlist_subgenre_encoder.pkl')
 artist_encoder = joblib.load('track_artist_encoder.pkl')
 name_encoder = joblib.load('playlist_name_encoder.pkl')
+model = joblib.load('popularity_predictor.pkl')
 
-# Apply encoders
-df['playlist_genre'] = genre_encoder.transform([df['playlist_genre'].iloc[0]])
-df['playlist_subgenre'] = subgenre_encoder.transform([df['playlist_subgenre'].iloc[0]])
-df['track_artist'] = artist_encoder.transform([df['track_artist'].iloc[0]])
-df['playlist_name'] = name_encoder.transform([df['playlist_name'].iloc[0]])
-
-# Reorder columns to match training set
+# Define the expected feature order
 expected_columns = [
     'energy', 'tempo', 'danceability', 'playlist_genre', 'loudness',
     'liveness', 'valence', 'track_artist', 'speechiness', 'playlist_name',
@@ -77,23 +24,86 @@ expected_columns = [
     'instrumental_loud_ratio', 'loud_dur_ratio', 'release_year_inverse'
 ]
 
+# Input mode toggle
+use_sample = st.checkbox("🎵 Use a sample song instead of manual input")
+
+if use_sample:
+    sample_df = pd.read_excel("../data/sample_test.xlsx")
+    selected_song = st.selectbox("Select a sample song", sample_df['song_name'].unique())
+    df = sample_df[sample_df['song_name'] == selected_song].drop(columns=["song_name", "popularity_class"]).reset_index(drop=True)
+else:
+    # Manual input mode
+    with st.expander("🎛️ Audio Features"):
+        loudness = st.slider('Loudness', -50.0, 0.0, -7.7)
+        energy = st.number_input('Energy', 0.0, 1.0, 0.592, step=0.001, format="%.4f")
+        valence = st.number_input('Valence', 0.0, 1.0, 0.535, step=0.001, format="%.4f")
+        danceability = st.number_input('Danceability', 0.0, 1.0, 0.521, step=0.001, format="%.4f")
+        tempo = st.slider('Tempo', 40.0, 250.0, 157.9)
+        duration_ms = st.number_input('Duration (ms)', 10000, 1000000, 251668)
+        liveness = st.number_input('Liveness', 0.0, 1.0, 0.122, step=0.001, format="%.4f")
+        speechiness = st.number_input('Speechiness', 0.0, 1.0, 0.034, step=0.001, format="%.4f")
+        acousticness = st.number_input('Acousticness', 0.0, 1.0, 0.0648, step=0.001, format="%.4f")
+
+    with st.expander("🎼 Musical Features"):
+        instrumentalness = st.number_input('Instrumentalness', 0.0, 1.0, 0.0, step=0.001, format="%.4f")
+        release_year = st.number_input('Release Year', 1950, 2025, 2020)
+
+    with st.expander("📦 Playlist & Metadata"):
+        playlist_genre = st.text_input("Playlist Genre", "pop")
+        playlist_subgenre = st.text_input("Playlist Subgenre", "mainstream")
+        playlist_name = st.text_input("Playlist Name", "Today's Top Hits")
+        track_artist = st.text_input("Track Artist", "Lady Gaga, Bruno Mars")
+
+    # Derived features
+    loud_dur_ratio = float(loudness) / float(duration_ms)
+    acousticness_inverse = 1.0 - float(acousticness)
+    instrumental_loud_ratio = float(instrumentalness) / float(loudness)
+    release_year_inverse = 1.0 / float(release_year)
+
+    # Construct DataFrame
+    input_data = {
+        "energy": energy,
+        "tempo": tempo,
+        "danceability": danceability,
+        "playlist_genre": playlist_genre,
+        "loudness": loudness,
+        "liveness": liveness,
+        "valence": valence,
+        "track_artist": track_artist,
+        "speechiness": speechiness,
+        "playlist_name": playlist_name,
+        "duration_ms": duration_ms,
+        "playlist_subgenre": playlist_subgenre,
+        "acousticness_inverse": acousticness_inverse,
+        "instrumental_loud_ratio": instrumental_loud_ratio,
+        "loud_dur_ratio": loud_dur_ratio,
+        "release_year_inverse": release_year_inverse,
+    }
+
+    df = pd.DataFrame([input_data])
+
+    # Encode categorical values
+    df['playlist_genre'] = genre_encoder.transform([df['playlist_genre'].iloc[0]])
+    df['playlist_subgenre'] = subgenre_encoder.transform([df['playlist_subgenre'].iloc[0]])
+    df['track_artist'] = artist_encoder.transform([df['track_artist'].iloc[0]])
+    df['playlist_name'] = name_encoder.transform([df['playlist_name'].iloc[0]])
+
+# Ensure column order matches model
 df = df[expected_columns]
 
-model = joblib.load('popularity_predictor.pkl')
-# Predict button
+# Prediction section
 if st.button("🔍 Predict Popularity"):
-    proba = model.predict_proba(df.to_numpy())[0]
-    prob_of_popular = proba[1] 
+    with st.spinner('Predicting...'):
+        proba = model.predict_proba(df.to_numpy())[0]
+        prob_of_popular = proba[1]
 
-    st.subheader("📈 Predicted Popularity:")
-    st.write("Probability of Popularity:", round(prob_of_popular * 100, 2), "%")
-
-    if prob_of_popular >= 0.5:
-        st.success("🎉 This song is likely to be popular!")
+    # Prediction interpretation
+    threshold = 0.265
+    if prob_of_popular >= threshold:
+        st.success(f"🎉 This song is likely to be **popular**! (Probability: {prob_of_popular:.2%})")
     else:
-        st.error("🙁 This song is unlikely to be popular.")
+        st.error(f"🙁 This song is likely **not** popular. (Probability: {prob_of_popular:.2%})")
 
-
+    # Input summary
     st.markdown("### 🧾 Input Summary")
-    st.write(input_data)
-    st.write("Model classes:", model.classes_)
+    st.write(df)
