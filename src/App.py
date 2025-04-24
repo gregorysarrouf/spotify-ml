@@ -90,20 +90,22 @@ else:
 
 # Ensure column order matches model
 df = df[expected_columns]
+# Load the scaler
+scaler = joblib.load('scaler.pkl')
 
 # Prediction section
+# 🔍 Prediction section (using predicted class directly)
 if st.button("🔍 Predict Popularity"):
     with st.spinner('Predicting...'):
-        proba = model.predict_proba(df.to_numpy())[0]
-        prob_of_popular = proba[1]
+        df_scaled = scaler.transform(df)  # Scale input
+        prediction = model.predict(df_scaled)[0]
+        proba = model.predict_proba(df_scaled)[0]
+        prob_popular = proba[1]
 
-    # Prediction interpretation
-    threshold = 0.265
-    if prob_of_popular >= threshold:
-        st.success(f"🎉 This song is likely to be **popular**! (Probability: {prob_of_popular:.2%})")
+    if prediction == 1:
+        st.success(f"🎉 This song is predicted to be **popular**! (Probability: {prob_popular:.2%})")
     else:
-        st.error(f"🙁 This song is likely **not** popular. (Probability: {prob_of_popular:.2%})")
+        st.error(f"🙁 This song is predicted to be **not popular**. (Probability: {prob_popular:.2%})")
 
-    # Input summary
     st.markdown("### 🧾 Input Summary")
     st.write(df)
