@@ -9,14 +9,15 @@ st.set_page_config(page_title="Song Popularity Predictor", layout="centered")
 st.title("🎶 Song Popularity Predictor")
 st.markdown("Fill in the song's features below to predict its popularity!")
 
-# Load encoders and model
+# Load encoders for categorical columns
 genre_encoder = joblib.load('playlist_genre_encoder.pkl')
 subgenre_encoder = joblib.load('playlist_subgenre_encoder.pkl')
 artist_encoder = joblib.load('track_artist_encoder.pkl')
 name_encoder = joblib.load('playlist_name_encoder.pkl')
+# Load the model
 model = joblib.load('popularity_predictor.pkl')
 
-# Define the expected feature order
+# Define the order of columns as expected by the model
 expected_columns = [
     'energy', 'tempo', 'danceability', 'playlist_genre', 'loudness',
     'liveness', 'valence', 'track_artist', 'speechiness', 'playlist_name',
@@ -24,15 +25,19 @@ expected_columns = [
     'instrumental_loud_ratio', 'loud_dur_ratio', 'release_year_inverse'
 ]
 
-# Input mode toggle
+# Let the user choose whether to use a preloaded song or input data manually
 use_sample = st.checkbox("🎵 Use a sample song instead of manual input")
 
+# OPTION 1: SAMPLE SONG MODE
 if use_sample:
-    sample_df = pd.read_excel("../data/sample_test.xlsx")
+    sample_df = pd.read_excel("../data/sample_test.xlsx") # load sample dataset from excel file
     selected_song = st.selectbox("Select a sample song", sample_df['song_name'].unique())
+    
+     #get only the selected song and drop unnecessary columns
     df = sample_df[sample_df['song_name'] == selected_song].drop(columns=["song_name", "popularity_class"]).reset_index(drop=True)
+
+#OPTION 2: MANUAL INPUT  
 else:
-    # Manual input mode
     with st.expander("🎛️ Audio Features"):
         loudness = st.slider('Loudness', -50.0, 0.0, -7.7)
         energy = st.number_input('Energy', 0.0, 1.0, 0.592, step=0.001, format="%.4f")
@@ -54,13 +59,12 @@ else:
         playlist_name = st.text_input("Playlist Name", "Today's Top Hits")
         track_artist = st.text_input("Track Artist", "Lady Gaga, Bruno Mars")
 
-    # Derived features
+    # Engineered Features
     loud_dur_ratio = float(loudness) / float(duration_ms)
     acousticness_inverse = 1.0 - float(acousticness)
     instrumental_loud_ratio = float(instrumentalness) / float(loudness)
     release_year_inverse = 1.0 / float(release_year)
 
-    # Construct DataFrame
     input_data = {
         "energy": energy,
         "tempo": tempo,
@@ -82,25 +86,29 @@ else:
 
     df = pd.DataFrame([input_data])
 
-    # Encode categorical values
+    # encode string-based categorical columns to numbers
     df['playlist_genre'] = genre_encoder.transform([df['playlist_genre'].iloc[0]])
     df['playlist_subgenre'] = subgenre_encoder.transform([df['playlist_subgenre'].iloc[0]])
     df['track_artist'] = artist_encoder.transform([df['track_artist'].iloc[0]])
     df['playlist_name'] = name_encoder.transform([df['playlist_name'].iloc[0]])
 
-# Ensure column order matches model
+# ensure column order matches model
 df = df[expected_columns]
 # Load the scaler
 scaler = joblib.load('scaler.pkl')
 
 # Prediction section
-# 🔍 Prediction section (using predicted class directly)
 if st.button("🔍 Predict Popularity"):
     with st.spinner('Predicting...'):
         df_scaled = scaler.transform(df)  # Scale input
+        
+        # predict class
         prediction = model.predict(df_scaled)[0]
+
+        # get probability values for each class
         proba = model.predict_proba(df_scaled)[0]
-        prob_popular = proba[1]
+        prob_popular = proba[1]  # Probability of class 1 (popular)
+
 
     if prediction == 1:
         st.success(f"🎉 This song is predicted to be **popular**! (Probability: {prob_popular:.2%})")
