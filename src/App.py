@@ -116,13 +116,11 @@ else:
     df = pd.DataFrame([input_data])
 
     # encode string-based categorical columns to numbers
-    df["playlist_genre"] = genre_encoder.transform([df["playlist_genre"].iloc[0]])
-    df["playlist_subgenre"] = subgenre_encoder.transform(
-        [df["playlist_subgenre"].iloc[0]]
-    )
-    df["track_artist"] = artist_encoder.transform([df["track_artist"].iloc[0]])
-    df["playlist_name"] = name_encoder.transform([df["playlist_name"].iloc[0]])
-
+     # Encode categorical values
+    df['playlist_genre'] = genre_encoder.transform([df['playlist_genre'].iloc[0]])
+    df['playlist_subgenre'] = subgenre_encoder.transform([df['playlist_subgenre'].iloc[0]])
+    df['track_artist'] = artist_encoder.transform([df['track_artist'].iloc[0]])
+    df['playlist_name'] = name_encoder.transform([df['playlist_name'].iloc[0]])
 # ensure column order matches model
 df = df[expected_columns]
 # Load the scaler
